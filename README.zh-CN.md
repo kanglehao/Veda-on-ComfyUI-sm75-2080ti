@@ -68,7 +68,7 @@ but the predictor was trained for 50 x 56 x 128.
 上游声明 >= 0.38.0，但 Veda 用到的 API 在更早版本就已存在）。
 
 ```bash
-git clone https://github.com/<owner>/<this-repo>.git \
+git clone https://github.com/kanglehao/Veda-on-ComfyUI-sm75-2080ti.git \
     ComfyUI/custom_nodes/veda_sm75
 ```
 
