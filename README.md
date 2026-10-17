@@ -77,7 +77,7 @@ Requires ComfyUI >= 0.37.0 (this fork was validated on 0.37.0 and 0.37.4;
 upstream declares >= 0.38.0, but the APIs Veda uses are present earlier).
 
 ```bash
-git clone https://github.com/<owner>/<this-repo>.git \
+git clone https://github.com/kanglehao/Veda-on-ComfyUI-sm75-2080ti.git \
     ComfyUI/custom_nodes/veda_sm75
 ```
 
