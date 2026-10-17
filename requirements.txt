@@ -1,0 +1,5 @@
+# Installed automatically with the node (see pyproject.toml); listed here
+# for anyone installing from a clone rather than the Comfy Registry.
+triton>=3.0; platform_system == "Linux"
+triton-windows>=3.0; platform_system == "Windows"
+mlx>=0.18; platform_system == "Darwin" and platform_machine == "arm64"
