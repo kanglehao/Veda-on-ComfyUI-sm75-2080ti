@@ -1,0 +1,103 @@
+"""Triton INT8 block-sparse attention: the CUDA and ROCm path.
+
+This is the same arithmetic ComfyUI runs behind `--use-sage-attention`
+(`from sageattention import sageattn`), so its accuracy is ComfyUI's, with
+Veda's block sparsity on top. On an RTX 5070 it reaches ~125 TFLOPS dense
+against ~45 for our bf16 CuTe kernel, and ~1.3% relative error against an
+fp32 reference where FP8 costs ~5.3%.
+
+Covers every CUDA GPU from SM80 on and RDNA3 / RDNA4 on ROCm, because
+Triton does: one backend instead of one per SM family, and no fallback
+behind it (see backends/__init__.py for why that is deliberate).
+
+Self-contained on purpose (see backends/base.py): imports only this file,
+torch, and `veda_comfy.kernels.sage`.
+"""
+
+from __future__ import annotations
+
+import functools
+import sys
+
+import torch
+
+from . import base
+from ..core import selection
+
+# [VEDA-SM75-PATCH] 上游按 (8,0) 设闸；SM75(Turing) 实测可跑，见补丁脚本说明
+_MIN_CC = (7, 5)
+
+
+@functools.cache
+def _kernel():
+    from ..kernels.sage import sparse_int8  # pylint: disable=import-outside-toplevel
+    return sparse_int8
+
+
+class TritonInt8Backend(base.Backend):
+    """SageAttention's INT8 arithmetic, walking only the kept tiles."""
+
+    name = 'triton-int8'
+    display = 'Triton INT8'
+    dtypes = (torch.bfloat16, torch.float16)
+    # INT8 Q and K with one scale per block: measured 1.3% relative error
+    # on a dense problem and 2.7% pointwise on the padding-heavy self-test
+    # problem, which is the format's floor rather than a fault. 5% still
+    # catches the real ones (a mis-strided V read came out at 650%).
+    tolerance = 0.05
+
+    def __init__(self, label: str):
+        self.display = f'Triton INT8 ({label})'
+
+    def attend(self, q, k, v, block_mask, layout):
+        index, count = selection.tile_index_list(block_mask & layout.kv_ok)
+        with torch.no_grad():
+            return _kernel().attend(q, k, v, index, count,
+                                    layout.valid_count)
+
+    def warmup_note(self) -> str:
+        return 'compiling Triton kernels for this GPU (first run only)'
+
+    def explain_failure(self, error: BaseException) -> str | None:
+        # Triton builds a small helper module (cuda_utils.c) with a C
+        # compiler on the first call. On the Windows portable ComfyUI that
+        # build is what breaks: the embedded Python ships without its
+        # headers and import library, so the compiler cannot find
+        # Python.h / pythonXY.lib and exits 1 with its own output
+        # swallowed (triton-windows issues 83, 156, 186). Nothing to do
+        # with the GPU, so say so rather than let the node blame it.
+        text = f'{type(error).__name__}: {error}'
+        if 'CalledProcessError' not in text or 'cuda_utils' not in text:
+            return None
+        return ('Triton could not build its CUDA helper on this install. '
+                'On ComfyUI portable this is the embedded Python missing '
+                'its C headers: copy Include\\ and libs\\ from the '
+                'matching python.org build into python_embeded\\, delete '
+                '%USERPROFILE%\\.triton\\cache, and restart ComfyUI.')
+
+
+def create(info) -> base.Backend:
+    rocm = info.subtype == 'rocm'
+    if info.kind != 'cuda' or info.cc is None or (
+            not rocm and info.cc < _MIN_CC):
+        raise base.BackendUnavailable(
+            'triton-int8 needs a CUDA GPU of SM80 or newer, or RDNA3 / '
+            'RDNA4 on ROCm')
+    try:
+        _kernel()
+    except ImportError as error:
+        # ROCm torch on Linux pins its own build, pytorch-triton-rocm; the
+        # PyPI `triton` would replace it with one torch was not built for.
+        package = ('triton-windows' if sys.platform == 'win32'
+                   else 'pytorch-triton-rocm' if rocm else 'triton')
+        raise base.MissingDependency(
+            f'Triton is not installed ({error}). Install it into the '
+            'Python that runs ComfyUI, then restart ComfyUI:\n'
+            f'  python -m pip install {package}\n'
+            'On ComfyUI portable run it as '
+            f'python_embeded\\python.exe -m pip install {package}.\n'
+            f'Triton 没有安装（{error}）。请用运行 ComfyUI 的那个 Python 安装，'
+            f'然后重启 ComfyUI：python -m pip install {package}'
+            '（ComfyUI 便携版用 python_embeded\\python.exe -m pip install '
+            f'{package}）。') from error
+    return TritonInt8Backend(info.family.upper())
