@@ -1,0 +1,47 @@
+[project]
+name = "veda-sparse-attention"
+version = "0.3.1"
+description = "Veda learned sparse attention for MiniMax-H3 in ComfyUI: ~2-3x faster T2VA / FL2VA / R2VA video+audio generation, LoRA-compatible. NVIDIA (Triton INT8, SM80 and newer, Linux / Windows), AMD RDNA3 / RDNA4 (ROCm) and Apple silicon (MLX)."
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+# Installed with the node, so the sparse kernel works without the user
+# doing anything. Triton is a real dependency now that the kernel is
+# written in it; on Linux torch already pulls the same package in, so this
+# is a no-op there far more often than not. Every entry needs a marker:
+# Manager installs requirements as a batch and one unbuildable wheel
+# fails the whole node.
+dependencies = [
+    "triton>=3.0; platform_system == 'Linux'",
+    "triton-windows>=3.0; platform_system == 'Windows'",
+    "mlx>=0.18; platform_system == 'Darwin' and platform_machine == 'arm64'",
+]
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Environment :: GPU :: Apple Metal",
+]
+
+[project.urls]
+Repository = "https://github.com/veda-sparse/Veda-on-ComfyUI"
+Documentation = "https://github.com/veda-sparse/Veda-on-ComfyUI#readme"
+"Bug Tracker" = "https://github.com/veda-sparse/Veda-on-ComfyUI/issues"
+
+[tool.comfy]
+PublisherId = "veda-sparse"
+DisplayName = "Veda Sparse Attention (MiniMax H3)"
+Icon = "https://raw.githubusercontent.com/veda-sparse/Veda-on-ComfyUI/main/assets/icon.svg"
+# First release with MiniMax-H3 and the H3 packed layout in
+# transformer_options["minimax_h3_layout"].
+requires-comfyui = ">=0.38.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
