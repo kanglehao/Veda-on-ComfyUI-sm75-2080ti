@@ -1,0 +1,15 @@
+# Excluded from the Comfy Registry package (gitignore syntax). Runtime
+# needs __init__.py, veda_comfy/, requirements.txt, example_workflows/,
+# assets/ and the docs at the top level.
+tests/
+tools/
+docs/
+.github/
+.githooks/
+AGENTS.md
+CLAUDE.md
+# Repository plumbing: nothing reads these once the node is unzipped into
+# custom_nodes, and .gitignore is 4.6 kB of it.
+.gitignore
+.gitattributes
+.comfyignore
